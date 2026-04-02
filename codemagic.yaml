@@ -1,0 +1,208 @@
+workflows:
+
+  # ─────────────────────────────────────────────────────────────
+  # WORKFLOW 1 — Debug APK  (every push to any branch)
+  # Fast build, no signing — good for testing on a device
+  # ─────────────────────────────────────────────────────────────
+  android-debug:
+    name: Android Debug APK
+    max_build_duration: 60        # minutes
+    instance_type: mac_mini_m2
+
+    environment:
+      node: 20.12.0
+      java: 17
+      vars:
+        PACKAGE_NAME: "com.notesync.app"
+      groups:
+        - notesync_env             # optional: add env-var group in Codemagic UI
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "*"
+          include: true
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Set up local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Expo prebuild (generates native android/ folder)
+        script: |
+          npx expo prebuild --platform android --clean --no-install
+
+      - name: Build debug APK
+        script: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - $CM_NOTIFY_EMAIL          # set this in Codemagic environment variables
+        notify:
+          success: true
+          failure: true
+
+  # ─────────────────────────────────────────────────────────────
+  # WORKFLOW 2 — Release APK  (signed, tag-triggered)
+  # Used for distributing to testers via a download link
+  # ─────────────────────────────────────────────────────────────
+  android-release-apk:
+    name: Android Release APK (Signed)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    environment:
+      node: 20.12.0
+      java: 17
+      android_signing:
+        - notesync_keystore          # keystore uploaded in Codemagic > Code Signing
+      vars:
+        PACKAGE_NAME: "com.notesync.app"
+        VERSION_CODE: $(($(date +%s) / 60))   # auto-increment from Unix time
+        VERSION_NAME: "1.0.0"
+      groups:
+        - notesync_env
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"
+          include: true
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Bump version in app.json
+        script: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            cfg.expo.version = process.env.VERSION_NAME || cfg.expo.version;
+            cfg.expo.android = cfg.expo.android || {};
+            cfg.expo.android.versionCode = parseInt(process.env.VERSION_CODE) || 1;
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2));
+            console.log('Version set:', cfg.expo.version, 'versionCode:', cfg.expo.android.versionCode);
+          "
+
+      - name: Expo prebuild
+        script: |
+          npx expo prebuild --platform android --clean --no-install
+
+      - name: Set up local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Build release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Sign APK with Codemagic keystore
+        script: |
+          # Codemagic injects CM_KEYSTORE, CM_KEY_ALIAS, CM_KEY_PASSWORD, CM_KEYSTORE_PASSWORD
+          # automatically when android_signing is configured above.
+          # The release APK is already signed via gradle if you configure signingConfigs.
+          # This step verifies the signature.
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner verify \
+            --print-certs \
+            android/app/build/outputs/apk/release/app-release.apk
+
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      email:
+        recipients:
+          - $CM_NOTIFY_EMAIL
+        notify:
+          success: true
+          failure: true
+
+  # ─────────────────────────────────────────────────────────────
+  # WORKFLOW 3 — Play Store AAB  (production, tag-triggered)
+  # Uploads directly to Google Play Internal track
+  # ─────────────────────────────────────────────────────────────
+  android-playstore:
+    name: Android Play Store AAB
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      node: 20.12.0
+      java: 17
+      android_signing:
+        - notesync_keystore
+      vars:
+        PACKAGE_NAME: "com.notesync.app"
+        VERSION_NAME: "1.0.0"
+        VERSION_CODE: $(($(date +%s) / 60))
+      groups:
+        - notesync_env
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "release-*"
+          include: true
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+
+      - name: Bump version
+        script: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            cfg.expo.version = process.env.VERSION_NAME || cfg.expo.version;
+            cfg.expo.android = cfg.expo.android || {};
+            cfg.expo.android.versionCode = parseInt(process.env.VERSION_CODE) || 1;
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2));
+          "
+
+      - name: Expo prebuild
+        script: |
+          npx expo prebuild --platform android --clean --no-install
+
+      - name: Set up local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Build release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease --no-daemon
+
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS   # JSON key — set in Codemagic env vars
+        track: internal                                     # internal → alpha → beta → production
+        submit_as_draft: true
+      email:
+        recipients:
+          - $CM_NOTIFY_EMAIL
+        notify:
+          success: true
+          failure: true
