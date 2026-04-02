@@ -14,8 +14,6 @@ workflows:
       java: 17
       vars:
         PACKAGE_NAME: "com.notesync.app"
-      groups:
-        - notesync_env             # optional: add env-var group in Codemagic UI
 
     triggering:
       events:
@@ -49,7 +47,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - $CM_NOTIFY_EMAIL          # set this in Codemagic environment variables
+          - your@email.com          # ← REPLACE with your email address
         notify:
           success: true
           failure: true
@@ -72,8 +70,6 @@ workflows:
         PACKAGE_NAME: "com.notesync.app"
         VERSION_CODE: $(($(date +%s) / 60))   # auto-increment from Unix time
         VERSION_NAME: "1.0.0"
-      groups:
-        - notesync_env
 
     triggering:
       events:
@@ -129,7 +125,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - $CM_NOTIFY_EMAIL
+          - your@email.com          # ← REPLACE with your email address
         notify:
           success: true
           failure: true
@@ -151,9 +147,6 @@ workflows:
       vars:
         PACKAGE_NAME: "com.notesync.app"
         VERSION_NAME: "1.0.0"
-        VERSION_CODE: $(($(date +%s) / 60))
-      groups:
-        - notesync_env
 
     triggering:
       events:
@@ -202,7 +195,7 @@ workflows:
         submit_as_draft: true
       email:
         recipients:
-          - $CM_NOTIFY_EMAIL
+          - your@email.com          # ← REPLACE with your email address
         notify:
           success: true
           failure: true
