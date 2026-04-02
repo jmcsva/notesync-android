@@ -47,7 +47,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your@email.com          # ← REPLACE with your email address
+          - tusharjain@duck.com          # ← REPLACE with your email address
         notify:
           success: true
           failure: true
@@ -125,7 +125,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your@email.com          # ← REPLACE with your email address
+          - tusharjain@duck.com          # ← REPLACE with your email address
         notify:
           success: true
           failure: true
@@ -195,7 +195,7 @@ workflows:
         submit_as_draft: true
       email:
         recipients:
-          - your@email.com          # ← REPLACE with your email address
+          - tusharjain@duck.com         # ← REPLACE with your email address
         notify:
           success: true
           failure: true
