@@ -25,7 +25,7 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          npm ci
+          npm install
 
       - name: Set up local.properties
         script: |
